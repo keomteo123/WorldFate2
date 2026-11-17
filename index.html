@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorldFate II — 산업과 제국의 시대</title>
+<style>
+:root{--bg:#141a24;--pn:#1d2533;--pn2:#253046;--ln:#3a4763;--tx:#e6dcc3;--dim:#9a9480;--gold:#d8b45a;--red:#d65a4f;--grn:#6cbf6a;--blu:#6aa3d8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Noto Serif KR","Malgun Gothic",serif;font-size:14px;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+button{font-family:inherit;background:var(--pn2);color:var(--tx);border:1px solid var(--ln);padding:4px 9px;border-radius:4px;cursor:pointer;font-size:13px}
+button:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+button:disabled{opacity:.35;cursor:default}
+button.on{background:var(--gold);color:#1a1a1a;border-color:var(--gold)}
+header{display:flex;align-items:center;gap:14px;padding:6px 12px;background:linear-gradient(#262f40,#1b2230);border-bottom:2px solid var(--gold);flex-wrap:wrap}
+header .flag{width:26px;height:18px;border:1px solid #000;display:inline-block;vertical-align:middle}
+.stat{display:flex;flex-direction:column;line-height:1.15}
+.stat small{color:var(--dim);font-size:11px}
+.stat b{font-size:15px}
+.pos{color:var(--grn)}.neg{color:var(--red)}
+#main{flex:1;display:flex;min-height:0}
+#mapwrap{flex:1;position:relative;min-width:0;background:#0d1520;display:flex;align-items:center;justify-content:center}
+canvas{max-width:100%;max-height:100%;cursor:pointer;image-rendering:auto}
+#modes{position:absolute;left:8px;top:8px;display:flex;gap:4px}
+#tip{position:fixed;pointer-events:none;background:rgba(15,20,30,.95);border:1px solid var(--gold);padding:6px 9px;border-radius:4px;font-size:12px;display:none;z-index:50;max-width:260px}
+aside{width:430px;background:var(--pn);border-left:1px solid var(--ln);display:flex;flex-direction:column;min-height:0}
+#tabs{display:flex;flex-wrap:wrap;gap:2px;padding:5px;border-bottom:1px solid var(--ln)}
+#tabs button{flex:1;padding:6px 2px}
+#panel{flex:1;overflow-y:auto;padding:10px}
+h3{margin:4px 0 8px;color:var(--gold);font-size:16px;border-bottom:1px solid var(--ln);padding-bottom:4px}
+h4{margin:12px 0 6px;color:var(--gold);font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+td,th{padding:3px 4px;border-bottom:1px solid #2c3648;text-align:right}
+td:first-child,th:first-child{text-align:left}
+th{color:var(--dim);font-weight:normal}
+.bar{height:8px;background:#0e131c;border-radius:4px;overflow:hidden;margin-top:2px}
+.bar i{display:block;height:100%;background:var(--gold)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:3px 0}
+.card{background:var(--pn2);border:1px solid var(--ln);border-radius:5px;padding:8px;margin-bottom:8px}
+.lawopts{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+footer{height:92px;background:#10151e;border-top:1px solid var(--ln);overflow-y:auto;font-size:12px;padding:4px 10px}
+footer div{padding:1px 0;color:var(--dim)}
+footer div.imp{color:var(--tx)}
+footer div.war{color:#f08a7e}
+#modal{position:fixed;inset:0;background:rgba(5,8,12,.85);display:flex;align-items:center;justify-content:center;z-index:100}
+#modal .box{background:var(--pn);border:2px solid var(--gold);border-radius:8px;padding:20px;max-width:760px;width:94%;max-height:90vh;overflow-y:auto}
+.title{font-size:34px;color:var(--gold);text-align:center;letter-spacing:4px;margin:0}
+.sub{text-align:center;color:var(--dim);margin:4px 0 16px}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.cpick{text-align:left;padding:10px;line-height:1.5}
+.cpick b{font-size:15px}
+.tag{display:inline-block;font-size:11px;padding:0 5px;border-radius:3px;background:#0e131c;color:var(--dim);margin-right:3px}
+@media (max-width:900px){
+ body{overflow:auto;height:auto}
+ #main{flex-direction:column}
+ aside{width:100%;border-left:none}
+ #panel{max-height:none}
+ #mapwrap{min-height:55vw}
+}
+</style>
+</head>
+<body>
+<header id="top"></header>
+<div id="main">
+ <div id="mapwrap">
+  <canvas id="map" width="1000" height="620"></canvas>
+  <div id="modes"></div>
+ </div>
+ <aside>
+  <div id="tabs"></div>
+  <div id="panel"></div>
+ </aside>
+</div>
+<footer id="log"></footer>
+<div id="tip"></div>
+<div id="modal" style="display:none"><div class="box" id="mbox"></div></div>
+<script>
+'use strict';
+// ================== 데이터 정의 ==================
+const W=1000,H=620;
+const GOODS={
+ grain:['곡물',20,'🌾'],fabric:['직물',20,'🧵'],wood:['목재',20,'🪵'],iron:['철광석',30,'⛏️'],coal:['석탄',30,'⚫'],
+ clothes:['의류',35,'👔'],furniture:['가구',35,'🪑'],tools:['공구',40,'🔧'],steel:['강철',50,'🔩'],luxury:['사치품',60,'💎'],weapons:['무기',60,'🔫']
+};
+const GK=Object.keys(GOODS);
+const BLD={
+ farm:{n:'농장',ic:'🌾',i:{},o:{grain:12},cp:50,res:'arable'},
+ cotton:{n:'면화 농장',ic:'🧶',i:{},o:{fabric:12},cp:50,res:'arable'},
+ logging:{n:'벌목장',ic:'🪵',i:{},o:{wood:12},cp:50,res:'forest'},
+ ironmine:{n:'철광산',ic:'⛏️',i:{tools:1},o:{iron:9},cp:80,res:'iron'},
+ coalmine:{n:'탄광',ic:'⚫',i:{tools:1},o:{coal:9},cp:80,res:'coal'},
+ textile:{n:'방직 공장',ic:'👔',i:{fabric:8},o:{clothes:12},cp:150},
+ furn:{n:'가구 공장',ic:'🪑',i:{wood:8},o:{furniture:12},cp:150},
+ toolw:{n:'공구 공장',ic:'🔧',i:{iron:6,wood:2},o:{tools:12},cp:150},
+ steelm:{n:'제철소',ic:'🔩',i:{iron:6,coal:4},o:{steel:12},cp:200,year:1838},
+ arms:{n:'무기 공장',ic:'🔫',i:{steel:4,coal:2},o:{weapons:9},cp:200,year:1840},
+ lux:{n:'사치품 공방',ic:'💎',i:{fabric:4,furniture:4},o:{luxury:8},cp:150},
+ constr:{n:'건설 부문',ic:'🏗️',i:{wood:8},o:{},cp:100,gov:1},
+ barracks:{n:'병영',ic:'⚔️',i:{weapons:1,clothes:1},o:{},cp:80,gov:1},
+ rail:{n:'철도',ic:'🚂',i:{steel:1,coal:1},o:{},cp:150,gov:1,year:1845,max:5}
+};
+const RESN={arable:'경작지',forest:'삼림',iron:'철 매장',coal:'석탄 매장'};
+const NEEDS={
+ p:{grain:.02,clothes:.015,wood:.01},
+ w:{grain:.4,clothes:.25,furniture:.1,wood:.1},
+ m:{grain:.6,clothes:.5,furniture:.25,wood:.2,luxury:.08},
+ u:{grain:1,clothes:1,furniture:.6,wood:.3,luxury:.6}
+};
+const STRN={p:'농민',w:'노동자',m:'중산층',u:'상류층'};
+const LAWS={
+ economy:{n:'경제 체제',o:{trad:'전통주의',laissez:'자유방임',interv:'개입주의',command:'계획경제'},d:{trad:'민간투자 25%',laissez:'민간투자 60%',interv:'민간투자 40%, 국가배당 20%',command:'국가배당 60%, 건설력 +25%'}},
+ tax:{n:'세율',o:{low:'낮음 (10%)',med:'보통 (20%)',high:'높음 (30%)'}},
+ trade:{n:'무역 정책',o:{free:'자유무역',protect:'보호무역',isolate:'고립주의'},d:{free:'세계시장 연동 50%',protect:'연동 25%, 관세 수입↑',isolate:'무역 없음'}},
+ labor:{n:'노동법',o:{none:'규제 없음',prot:'노동자 보호'},d:{none:'',prot:'임금 +25%'}},
+ voting:{n:'정치 체제',o:{autocracy:'전제정',census:'제한 선거',universal:'보통 선거'}}
+};
+const IGS={
+ land:{n:'지주',c:'#c9a35b',pref:{economy:{trad:2,laissez:-1,interv:0,command:-2},tax:{low:1,med:0,high:-1},trade:{free:-1,protect:1,isolate:0},labor:{none:1,prot:-1},voting:{autocracy:2,census:0,universal:-2}},sol:'u'},
+ ind:{n:'실업가',c:'#6aa3d8',pref:{economy:{trad:-1,laissez:2,interv:0,command:-2},tax:{low:1,med:0,high:-1},trade:{free:2,protect:0,isolate:-2},labor:{none:1,prot:-2},voting:{autocracy:-1,census:1,universal:0}},sol:'u'},
+ uni:{n:'노동조합',c:'#d65a4f',pref:{economy:{trad:-1,laissez:-1,interv:1,command:1},tax:{low:-1,med:0,high:1},trade:{free:0,protect:1,isolate:0},labor:{none:-1,prot:2},voting:{autocracy:-2,census:0,universal:2}},sol:'w'},
+ intel:{n:'지식인',c:'#a98ad8',pref:{economy:{trad:-1,laissez:1,interv:1,command:0},tax:{low:0,med:0,high:0},trade:{free:1,protect:0,isolate:-1},labor:{none:0,prot:1},voting:{autocracy:-2,census:1,universal:2}},sol:'m'}
+};
+const CDEF=[
+ {name:'알비온 왕국',col:[196,62,58],laws:{economy:'laissez',tax:'med',trade:'free',labor:'none',voting:'census'},bonus:'ind'},
+ {name:'갈리아 공화국',col:[64,96,196],laws:{economy:'interv',tax:'med',trade:'protect',labor:'none',voting:'census'}},
+ {name:'프로이센 연방',col:[88,92,104],laws:{economy:'trad',tax:'med',trade:'protect',labor:'none',voting:'autocracy'},bonus:'mil'},
+ {name:'루테니아 제국',col:[62,140,84],laws:{economy:'trad',tax:'high',trade:'isolate',labor:'none',voting:'autocracy'}},
+ {name:'오스마니아 술탄국',col:[196,164,64],laws:{economy:'trad',tax:'med',trade:'protect',labor:'none',voting:'autocracy'}},
+ {name:'이베리아 왕국',col:[214,124,44],laws:{economy:'trad',tax:'low',trade:'free',labor:'none',voting:'autocracy'}},
+ {name:'아펜니아 연합',col:[96,176,190],laws:{economy:'laissez',tax:'med',trade:'free',labor:'none',voting:'census'}},
+ {name:'스칸디아 연합왕국',col:[140,96,176],laws:{economy:'interv',tax:'med',trade:'free',labor:'none',voting:'census'}},
+ {name:'다누비아 제국',col:[222,206,150],laws:{economy:'trad',tax:'med',trade:'protect',labor:'none',voting:'autocracy'}}
+];
+const SYL1=['노르','베르','칼','슈타','로','마르','엘','아르','빌','오스','트레','그란','라','하이','도','몬','산','리','브라','페','카','발','스베','쾨','루','안','에스','바','코','테'];
+const SYL2=['하임','부르크','니아','텐','스크','몽','레아','도르','가르트','폴','렌','시아','베르크','마르크','톤','리아','바드','스탄','노','고라'];
+
+// ================== 유틸 ==================
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+const $=id=>document.getElementById(id);
+function fmt(n){const a=Math.abs(n);if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e4)return(n/1e3).toFixed(1)+'K';if(a>=100)return Math.round(n).toLocaleString();return(Math.round(n*10)/10).toString()}
+function fpop(k){return k>=1000?(k/1000).toFixed(2)+'백만':Math.round(k)+'천'}
+function sgn(n){return(n>=0?'+':'')+fmt(n)}
+function rgb(c){return`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`}
+
+let G=null,RAST=null,CEN=[],TEX=null,selState=-1,tab='nation',mapMode='pol',dirty=true;
+
+// ================== 맵 생성 ==================
+function genWorld(seed){
+ const R=rng(seed);const states=[];const cols=11,rows=7;let id=0;
+ const ph=[R()*6,R()*6,R()*6];
+ for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+  const x=(c+.5)*W/cols+(R()-.5)*W/cols*.8, y=(r+.5)*H/rows+(R()-.5)*H/rows*.8;
+  const e=Math.min(x,W-x,y,H-y);
+  const v=Math.sin(x*.007+ph[0])+Math.sin(y*.011+ph[1])*.8+Math.sin((x-y)*.005+ph[2])*.7-(e<70?1.4:0)+R()*.5;
+  states.push({id:id++,x,y,v,sea:false,owner:-1,pop:0,res:{},b:{},bp:{},neg:{},name:''});
+ }
+ const vs=states.map(s=>s.v).sort((a,b)=>a-b);const th=vs[Math.floor(vs.length*.3)];
+ const used=new Set();
+ for(const s of states){s.sea=s.v<th;delete s.v;
+  if(!s.sea){let nm;do{nm=SYL1[Math.floor(R()*SYL1.length)]+SYL2[Math.floor(R()*SYL2.length)]}while(used.has(nm));used.add(nm);s.name=nm;
+   s.pop=Math.round(400+R()*1500);
+   s.res={arable:2+Math.floor(R()*8),forest:Math.floor(R()*5),iron:R()<.38?1+Math.floor(R()*4):0,coal:R()<.33?1+Math.floor(R()*4):0};
+  }else s.name='바다';
+ }
+ return states;
+}
+function noiseOff(x,y){return[14*Math.sin(y*.045+x*.011)+7*Math.sin(y*.13+x*.07),14*Math.cos(x*.04-y*.012)+7*Math.sin(x*.12+y*.05)]}
+function buildRaster(){
+ const st=G.states,n=st.length;RAST=new Int16Array(W*H);
+ const xs=new Float32Array(n),ys=new Float32Array(n);st.forEach((s,i)=>{xs[i]=s.x;ys[i]=s.y});
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const o=noiseOff(x,y),px=x+o[0],py=y+o[1];let best=0,bd=1e12;
+  for(let i=0;i<n;i++){const dx=xs[i]-px,dy=ys[i]-py,d=dx*dx+dy*dy;if(d<bd){bd=d;best=i}}
+  RAST[y*W+x]=best;
+ }
+ // 인접, 중심
+ const adj=st.map(()=>new Set()),seaT=st.map(()=>new Set());CEN=st.map(()=>({x:0,y:0,n:0}));
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const a=RAST[y*W+x];const c=CEN[a];c.x+=x;c.y+=y;c.n++;
+  const nb=[x<W-1?RAST[y*W+x+1]:a,y<H-1?RAST[(y+1)*W+x]:a];
+  for(const b of nb)if(b!==a){
+   if(!st[a].sea&&!st[b].sea){adj[a].add(b);adj[b].add(a)}
+   else if(st[a].sea&&!st[b].sea)seaT[b].add(a);else if(st[b].sea&&!st[a].sea)seaT[a].add(b);
+  }
+ }
+ CEN.forEach(c=>{if(c.n){c.x/=c.n;c.y/=c.n}});
+ st.forEach((s,i)=>{s.adj=[...adj[i]];s.coast=seaT[i].size>0;s._sea=[...seaT[i]]});
+ // 바다를 통한 인접
+ st.forEach((s,i)=>{s.nadj=[];if(s.sea)return;st.forEach((t,j)=>{if(j!==i&&!t.sea&&!adj[i].has(j)&&s._sea.some(q=>t._sea.includes(q)))s.nadj.push(j)})});
+ TEX=new Uint8Array(W*H);const R=rng(7);for(let i=0;i<W*H;i++)TEX[i]=R()*14|0;
+}
+function assignCountries(seed){
+ const R=rng(seed+99);const land=G.states.filter(s=>!s.sea);const nC=CDEF.length;
+ const caps=[land[Math.floor(R()*land.length)]];
+ while(caps.length<nC){let best=null,bd=-1;for(const s of land){const d=Math.min(...caps.map(c=>(c.x-s.x)**2+(c.y-s.y)**2));if(d>bd){bd=d;best=s}}caps.push(best)}
+ // 섞기
+ for(let i=caps.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[caps[i],caps[j]]=[caps[j],caps[i]]}
+ G.countries=CDEF.map((d,i)=>newCountry(i,d,caps[i].id));
+ caps.forEach((s,i)=>s.owner=i);
+ const fr=caps.map(s=>[s.id]);const wgt=CDEF.map(()=>.6+R()*.8);let progress=true;
+ while(progress){progress=false;
+  for(let i=0;i<nC;i++){if(R()>wgt[i])continue;const q=fr[i];
+   while(q.length){const k=Math.floor(R()*q.length);const s=G.states[q[k]];const free=s.adj.filter(j=>G.states[j].owner<0);
+    if(!free.length){q.splice(k,1);continue}const t=G.states[free[Math.floor(R()*free.length)]];t.owner=i;q.push(t.id);progress=true;break}
+   if(q.length)progress=true;}
+  if(!fr.some(q=>q.length))break;
+ }
+ for(const s of land)if(s.owner<0){let best=0,bd=1e12;caps.forEach((c,i)=>{const d=(c.x-s.x)**2+(c.y-s.y)**2;if(d<bd){bd=d;best=i}});s.owner=best}
+ // 초기 건물
+ for(const s of land){
+  const b=s.b;b.farm=Math.min(s.res.arable,1+Math.round(s.pop/450));
+  if(s.res.arable>b.farm&&R()<.5)b.cotton=1;
+  if(s.res.forest)b.logging=1+(R()<.3?1:0);
+  if(s.res.iron)b.ironmine=1;if(s.res.coal)b.coalmine=1;
+ }
+ G.countries.forEach((c,i)=>{
+  const cap=G.states[c.capital];cap.pop=Math.round(cap.pop*1.5);
+  Object.assign(cap.b,{textile:2,furn:1,toolw:1,constr:3,barracks:3,lux:1});
+  const own=ownStates(i).sort((a,b)=>b.pop-a.pop);
+  if(own[1]){own[1].b.textile=(own[1].b.textile||0)+1;own[1].b.barracks=1}
+  if(CDEF[i].bonus==='ind'){cap.b.textile+=2;cap.b.toolw+=1;cap.b.steelm=1;cap.b.constr+=1}
+  if(CDEF[i].bonus==='mil'){cap.b.barracks+=3;cap.b.arms=1}
+ });
+}
+function newCountry(i,d,cap){
+ const price={},fill={},S={},D={},imp={},exp={};GK.forEach(g=>{price[g]=GOODS[g][1];fill[g]=1;S[g]=D[g]=imp[g]=exp[g]=0});
+ return{id:i,name:d.name,col:d.col,capital:cap,alive:true,treasury:6000,laws:{...d.laws},enact:null,price,fill,S,D,imp,exp,
+  wealth:{p:1,w:1,m:1,u:1.5},sol:{p:5,w:8,m:10,u:15},stab:55,ig:{},clout:{},queue:[],privQ:[],invest:0,
+  gdp:0,army:0,cp:0,bal:0,inc:{},popT:0,emp:0,hist:[]};
+}
+function ownStates(cid){return G.states.filter(s=>!s.sea&&s.owner===cid)}
+function C(i){return G.countries[i]}
+
+// ================== 시간 ==================
+function dateObj(){return new Date(Date.UTC(1836,0,1)+G.day*864e5)}
+function year(){return dateObj().getUTCFullYear()}
+function dateStr(){const d=dateObj();return`${d.getUTCFullYear()}년 ${d.getUTCMonth()+1}월 ${d.getUTCDate()}일`}
+function log(msg,cls=''){G.log.unshift({t:dateStr(),m:msg,c:cls});if(G.log.length>120)G.log.pop();renderLog()}
+
+// ================== 경제 시뮬레이션 ==================
+function unlocked(t){return!BLD[t].year||year()>=BLD[t].year}
+function capFor(s,t){const d=BLD[t];if(d.res==='arable')return s.res.arable-((s.b.farm||0)+(s.b.cotton||0))+(s.b[t]||0);if(d.res)return s.res[d.res];if(d.max)return d.max;return 99}
+function canBuild(s,t,c){
+ if(!unlocked(t))return false;const queued=(c?c.queue:[]).filter(q=>q.s===s.id&&q.t===t).length+(c?c.privQ:[]).filter(q=>q.s===s.id&&q.t===t).length;
+ const d=BLD[t];if(d.res==='arable'){const used=(s.b.farm||0)+(s.b.cotton||0)+(c?c.queue.concat(c.privQ).filter(q=>q.s===s.id&&BLD[q.t].res==='arable').length:0);return used<s.res.arable}
+ return(s.b[t]||0)+queued<capFor(s,t);
+}
+function wageOf(c){return 30*(c.laws.labor==='prot'?1.25:1)}
+function lvlCost(c){const w=wageOf(c);return 5*(.85*w+.13*w*2)}
+function atWar(cid){return G.wars.some(w=>w.a===cid||w.b===cid)}
+function tradeS(c){return{free:.5,protect:.25,isolate:0}[c.laws.trade]}
+
+function econ(c){
+ const L=c.laws,ss=ownStates(c.id),st=tradeS(c),wage=wageOf(c),prod=1-Math.max(0,30-c.stab)/100*.8;
+ const S={},D={};GK.forEach(g=>{S[g]=0;D[g]=0});
+ let emp=0,popT=0;const recs=[];const war=atWar(c.id);
+ for(const s of ss){
+  popT+=s.pop;let jobs=0;for(const t in s.b)jobs+=(s.b[t]||0)*5;
+  const staff=jobs>0?Math.min(1,s.pop*.5/jobs):1;s.staff=staff;emp+=jobs*staff;
+  const rail=1+.08*Math.min(5,s.b.rail||0);
+  for(const t in s.b){const lv=s.b[t];if(!lv)continue;const d=BLD[t],k=lv*staff,mult=(t==='barracks'&&war)?2:1;
+   let mf=1;for(const g in d.i)mf=Math.min(mf,c.fill[g]);
+   const eff=(d.gov?.4+.6*mf:(.2+.8*mf)*rail)*prod;
+   for(const g in d.i)D[g]+=d.i[g]*k*mult;
+   for(const g in d.o)S[g]+=d.o[g]*k*eff;
+   recs.push({s,t,k,eff,mult,mf});
+  }
+ }
+ const cnt={w:emp*.85,m:emp*.13,u:emp*.02+popT*.003,p:Math.max(0,popT-emp-popT*.003)};
+ for(const grp in NEEDS)for(const g in NEEDS[grp])D[g]+=NEEDS[grp][g]*cnt[grp]*c.wealth[grp];
+ // 무역 & 가격
+ let tariff=0;
+ for(const g of GK){const d=D[g],sp=S[g];let imp=0,exp=0;
+  if(d>sp)imp=Math.min(d-sp,2*st*d);else exp=Math.min(sp-d,2*st*sp);
+  c.fill[g]=d>0?Math.min(1,(sp+imp)/d):1;
+  const seff=sp+imp-exp,r=cl((d-seff)/Math.max(d,seff,1),-1,1);
+  let tgt=GOODS[g][1]*(1+.75*r);tgt=tgt*(1-st)+G.world[g]*st;
+  c.price[g]+=(tgt-c.price[g])*.2;
+  c.imp[g]=imp;c.exp[g]=exp;
+  tariff+=(imp+exp)*c.price[g]*(L.trade==='protect'?.15:L.trade==='free'?.03:0);
+ }
+ c.S=S;c.D=D;
+ // 건물 손익
+ let P=0,gdp=0,wW=0,wM=0,govCost=0,cp=0,army=5;
+ ss.forEach(s=>s.gdp=0);
+ for(const r of recs){const d=BLD[r.t];
+  const wc=r.k*5*(.85*wage+.13*wage*2);wW+=r.k*5*.85*wage;wM+=r.k*5*.13*wage*2;
+  let inC=0;for(const g in d.i)inC+=d.i[g]*r.k*r.mult*c.price[g]*c.fill[g];
+  let rev=0;for(const g in d.o)rev+=d.o[g]*r.k*r.eff*c.price[g];
+  gdp+=rev;r.s.gdp+=rev;
+  if(d.gov){govCost+=wc+inC;if(r.t==='constr')cp+=5*r.k*r.eff;if(r.t==='barracks')army+=10*r.k*r.eff*(CDEF[c.id].bonus==='mil'?1.25:1)}
+  else{const pr=rev-inC-wc;P+=Math.max(0,pr);r.s.bp[r.t]=pr/Math.max(.01,r.s.b[r.t]);
+   if(pr<0){r.s.neg[r.t]=(r.s.neg[r.t]||0)+1;if(r.s.neg[r.t]>=40&&r.s.b[r.t]>0){r.s.b[r.t]--;r.s.neg[r.t]=0;if(c.id===G.player)log(`${r.s.name}의 ${BLD[r.t].n} 1단계가 적자로 폐업했습니다.`)}}
+   else r.s.neg[r.t]=0;}
+ }
+ const ED={trad:[0,.25],laissez:[0,.6],interv:[.2,.4],command:[.6,0]}[L.economy];
+ const div=P*ED[0],inv=P*ED[1],upInc=P-div-inv+popT*.003*50;
+ const tr={low:.1,med:.2,high:.3}[L.tax];
+ const tax=tr*(wW+wM+upInc)*.9;
+ // 생활수준
+ const net={p:1.0,w:cnt.w?wW*(1-tr)/cnt.w:wage,m:cnt.m?wM*(1-tr)/cnt.m:wage*2,u:cnt.u?upInc*(1-tr)/cnt.u:60};
+ for(const grp in NEEDS){let bc=0,fv=0;for(const g in NEEDS[grp]){const v=NEEDS[grp][g]*c.price[g];bc+=v;fv+=v*c.fill[g]}
+  const ratio=net[grp]/Math.max(.01,bc),fa=fv/Math.max(.01,bc);
+  c.wealth[grp]+=(cl(ratio,.2,3)-c.wealth[grp])*.2;
+  const tgt=cl(8+6*Math.log2(Math.max(.05,ratio*fa))+(grp==='p'?-3:0),0,40);c.sol[grp]+=(tgt-c.sol[grp])*.05;}
+ // 재정
+ const admin=popT*.1+gdp*.03,interest=c.treasury<0?-c.treasury*.002:0;
+ const income=tax+div+tariff,expense=govCost+admin+interest;
+ c.treasury+=income-expense;c.bal=income-expense;
+ c.inc={tax,div,tariff,govCost,admin,interest};
+ if(c.treasury<-Math.max(60000,gdp*3)){c.treasury=0;c.stab-=25;ss.forEach(s=>{if(s.b.constr>1)s.b.constr--});
+  if(c.laws.trade==='isolate')c.laws.trade='protect';
+  if(c.id===G.player)popup('국가 파산!','부채를 감당하지 못해 채무 불이행을 선언했습니다. 부채는 탕감되었지만 안정도가 크게 떨어지고 건설 부문이 축소되었습니다.');
+  log(`💸 ${c.name}이(가) 국가 파산을 선언했습니다.`,c.id===G.player?'war':'')}
+ if(L.economy==='command')cp*=1.25;
+ if(c.treasury<-40000)cp*=.5;
+ c.cp=cp;c.army=army;c.gdp=gdp;c.popT=popT;c.emp=emp;c.cnt=cnt;
+ // 건설 진행
+ let pts=cp;while(pts>0&&c.queue.length){const q=c.queue[0];const need=BLD[q.t].cp-q.p;const use=Math.min(need,pts);q.p+=use;pts-=use;
+  if(q.p>=BLD[q.t].cp-1e-6){c.queue.shift();const s=G.states[q.s];if(s.owner===c.id){s.b[q.t]=(s.b[q.t]||0)+1;if(c.id===G.player)log(`🏗️ ${s.name}에 ${BLD[q.t].n} 완공 (Lv ${s.b[q.t]})`,'imp')}}}
+ // 민간 투자
+ c.invest+=inv;
+ for(const q of c.privQ)q.w--;
+ c.privQ=c.privQ.filter(q=>{if(q.w>0)return true;const s=G.states[q.s];if(s.owner===c.id){s.b[q.t]=(s.b[q.t]||0)+1;if(c.id===G.player)log(`💼 민간 투자로 ${s.name}에 ${BLD[q.t].n} 확장`)}return false});
+ if(G.day%28===0&&c.invest>0){const best=bestInvest(c);if(best){const cost=BLD[best.t].cp*60;if(c.invest>=cost){c.invest-=cost;c.privQ.push({s:best.s.id,t:best.t,w:16})}}}
+ // 인구
+ for(const s of ss){const g=(.004+.0008*(c.sol.w-8))*c.fill.grain;s.pop*=1+g/52;if(war)s.pop*=.9998}
+ // 이익집단 & 안정도
+ stability(c);
+ // 법 제정
+ if(c.enact){c.enact.p+=(.5+c.stab/100)/26;if(c.enact.p>=1){c.laws[c.enact.k]=c.enact.v;if(c.id===G.player)log(`📜 ${LAWS[c.enact.k].n}: ${LAWS[c.enact.k].o[c.enact.v]} 법안이 통과되었습니다!`,'imp');c.enact=null}}
+}
+function estProfit(c,s,t){
+ if(s.b[t]&&s.bp[t]!==undefined)return s.bp[t];
+ const d=BLD[t];let r=0;for(const g in d.o)r+=d.o[g]*c.price[g];let i=0;for(const g in d.i)i+=d.i[g]*c.price[g];return r-i-lvlCost(c);
+}
+function bestInvest(c){
+ let best=null,bs=0;
+ for(const s of ownStates(c.id)){let jobs=0;for(const t in s.b)jobs+=(s.b[t]||0)*5;if(jobs>s.pop*.5*.92)continue;
+  for(const t in BLD){if(BLD[t].gov||!canBuild(s,t,c))continue;const p=estProfit(c,s,t);const sc=p/BLD[t].cp*(1+Math.random()*.3);if(sc>bs){bs=sc;best={s,t}}}}
+ return best;
+}
+function stability(c){
+ const inc=c.inc||{},cnt=c.cnt||{w:1,m:1,u:1,p:1};
+ let tot=0,ws=0;
+ const clout={land:cnt.p*.15+cnt.u*20*.5,ind:cnt.u*20*.5+cnt.m*1,uni:cnt.w*.6*(c.laws.voting==='autocracy'?.5:1),intel:cnt.m*2*(c.laws.voting==='universal'?1.3:1)};
+ if(c.laws.voting==='universal'){clout.uni*=1.6}
+ let cs=0;for(const k in clout)cs+=clout[k];
+ for(const k in IGS){const ig=IGS[k];let a=0;for(const lk in ig.pref)a+=ig.pref[lk][c.laws[lk]]||0;
+  a+=(c.sol[ig.sol]-(ig.sol==='u'?15:ig.sol==='m'?10:8))/4;a=cl(a,-10,10);
+  c.ig[k]=a;c.clout[k]=clout[k]/cs;tot+=a*c.clout[k];}
+ let tgt=55+tot*6+(c.treasury<-40000?-15:0);
+ c.stab+=(cl(tgt,0,100)-c.stab)*.05;
+ c.radical=cl(Math.round((50-c.stab)*.8+(8-c.sol.w)*3),0,100);
+ if(c.stab<15&&Math.random()<.01){const s=ownStates(c.id)[Math.floor(Math.random()*ownStates(c.id).length)];if(s){s.pop*=.98;c.treasury-=2000;if(c.id===G.player)log(`🔥 ${s.name}에서 급진주의자들의 봉기가 일어났습니다! 국고 -2,000`,'war')}}
+}
+
+// ================== 전쟁 & 외교 ==================
+function neighbors(cid){
+ const set=new Set();for(const s of ownStates(cid)){for(const j of s.adj.concat(s.nadj)){const o=G.states[j].owner;if(o>=0&&o!==cid)set.add(o)}}return[...set];
+}
+function truce(a,b){return G.truces.some(t=>((t.a===a&&t.b===b)||(t.a===b&&t.b===a))&&t.until>G.day)}
+function declareWar(a,b){
+ G.wars.push({a,b,score:0,weeks:0});
+ const msg=`⚔️ ${C(a).name}이(가) ${C(b).name}에게 선전포고했습니다!`;log(msg,(a===G.player||b===G.player)?'war':'');
+ if(b===G.player)popup('전쟁 발발!',msg+'<br>병영을 늘리고 무기 공급을 확보하세요.');
+ dirty=true;
+}
+function warTick(){
+ for(const w of G.wars){
+  const A=C(w.a),B=C(w.b);const na=G.wars.filter(x=>x.a===w.a||x.b===w.a).length,nb=G.wars.filter(x=>x.a===w.b||x.b===w.b).length;
+  const sa=A.army/na*(.85+Math.random()*.3),sb=B.army/nb*(.85+Math.random()*.3)*1.1;// 방어 보너스
+  w.score=cl(w.score+7*(sa/(sa+sb)-.5)+(Math.random()-.5)*2.5,-100,100);w.weeks++;
+ }
+ for(const w of [...G.wars]){
+  const human=w.a===G.player||w.b===G.player;
+  if(Math.abs(w.score)>=100||(!human&&(Math.abs(w.score)>=60||w.weeks>156)))endWar(w);
+  else if(human&&w.weeks>12){// AI가 지고 있으면 항복 제안
+   const ai=w.a===G.player?w.b:w.a;const pScore=w.a===G.player?w.score:-w.score;
+   if(pScore>=70&&Math.random()<.05){endWar(w)}
+  }
+ }
+}
+function endWar(w,white=false){
+ G.wars=G.wars.filter(x=>x!==w);G.truces.push({a:w.a,b:w.b,until:G.day+365*5});
+ if(white||Math.abs(w.score)<40){log(`🕊️ ${C(w.a).name}와(과) ${C(w.b).name}가 백색평화를 맺었습니다.`,(w.a===G.player||w.b===G.player)?'imp':'');return}
+ const win=w.score>0?w.a:w.b,lose=w.score>0?w.b:w.a;const n=Math.abs(w.score)>=90?2:1;
+ const taken=[];
+ for(let k=0;k<n;k++){
+  const ls=ownStates(lose);if(ls.length<=1&&k>0)break;
+  let cands=ls.filter(s=>s.adj.concat(s.nadj).some(j=>G.states[j].owner===win));if(!cands.length)cands=ls;
+  const nonCap=cands.filter(s=>s.id!==C(lose).capital);if(nonCap.length)cands=nonCap;
+  cands.sort((a,b)=>b.pop-a.pop);const s=cands[0];if(!s)break;transfer(s,win);taken.push(s.name);
+ }
+ const msg=`📜 ${C(win).name}이(가) ${C(lose).name}에게 승리! 할양: ${taken.join(', ')}`;
+ log(msg,(win===G.player||lose===G.player)?'war':'');
+ if(win===G.player||lose===G.player)popup(win===G.player?'승리!':'패전',msg);
+}
+function transfer(s,to){
+ const from=s.owner;s.owner=to;dirty=true;
+ const fc=C(from);fc.queue=fc.queue.filter(q=>q.s!==s.id);fc.privQ=fc.privQ.filter(q=>q.s!==s.id);
+ if(fc.capital===s.id){const rest=ownStates(from).sort((a,b)=>b.pop-a.pop);if(rest[0])fc.capital=rest[0].id}
+ if(!ownStates(from).length){fc.alive=false;G.wars=G.wars.filter(w=>w.a!==from&&w.b!==from);log(`💀 ${fc.name}이(가) 멸망했습니다.`,'war');
+  if(from===G.player){popup('게임 오버','당신의 나라는 지도에서 사라졌습니다.<br><br><button onclick="location.reload()">처음으로</button>');G.speed=0}}
+}
+
+// ================== AI ==================
+function aiTick(c){
+ if(c.id===G.player||!c.alive)return;
+ const t=c.laws.tax;
+ if(c.treasury<-8000&&t!=='high')c.laws.tax=t==='low'?'med':'high';
+ else if(c.treasury>30000&&t!=='low')c.laws.tax=t==='high'?'med':'low';
+ if(c.queue.length<(c.treasury>50000?4:2)&&c.treasury>-5000){
+  const ss=ownStates(c.id);const cap=G.states[c.capital];
+  const cons=ss.reduce((a,s)=>a+(s.b.constr||0),0);
+  const nb=neighbors(c.id);const avgA=nb.length?nb.reduce((a,i)=>a+C(i).army,0)/nb.length:0;
+  if(cons<2+c.gdp/4000||(c.treasury>80000&&Math.random()<.5))c.queue.push({s:cap.id,t:'constr',p:0});
+  else if(c.army<avgA*.9&&Math.random()<.4)c.queue.push({s:cap.id,t:'barracks',p:0});
+  else if(unlocked('rail')&&Math.random()<.15){const s=ss.find(s=>canBuild(s,'rail',c));if(s)c.queue.push({s:s.id,t:'rail',p:0})}
+  else{const b=bestInvest(c);if(b)c.queue.push({s:b.s.id,t:b.t,p:0})}
+ }
+ if(!atWar(c.id)&&G.day>180&&Math.random()<.0025){
+  const nb=neighbors(c.id).filter(i=>C(i).alive&&!truce(c.id,i)&&C(i).army<c.army*.6);
+  if(nb.length)declareWar(c.id,nb[Math.floor(Math.random()*nb.length)]);
+ }
+}
+
+// ================== 이벤트 ==================
+const EVENTS=[
+ {n:'풍작',f:c=>{ownStates(c.id).forEach(s=>s.pop*=1.005);return'풍작으로 인구가 소폭 증가했습니다.'}},
+ {n:'콜레라 유행',f:c=>{ownStates(c.id).forEach(s=>s.pop*=.985);return'콜레라가 유행하여 인구가 감소했습니다.'}},
+ {n:'금광 발견',f:c=>{c.treasury+=4000;return'금광이 발견되어 국고가 4,000 증가했습니다.'}},
+ {n:'노동 쟁의',f:c=>{c.stab-=6;return'대규모 파업이 일어나 안정도가 하락했습니다.'}},
+ {n:'과학 진보',f:c=>{const s=G.states[c.capital];s.pop*=1.01;c.stab+=3;return'수도의 대학에서 위대한 발견이 이루어졌습니다. 안정도 상승.'}},
+ {n:'광맥 발견',f:c=>{const ss=ownStates(c.id);const s=ss[Math.floor(Math.random()*ss.length)];const k=Math.random()<.5?'iron':'coal';s.res[k]+=2;return`${s.name}에서 새로운 ${RESN[k]}이 발견되었습니다! (+2)`}}
+];
+
+// ================== 메인 틱 ==================
+function tick(){
+ for(const g of GK){let a=0,n=0;for(const c of G.countries)if(c.alive){a+=c.price[g];n++}G.world[g]=a/n}
+ for(const c of G.countries)if(c.alive)econ(c);
+ warTick();
+ if(G.day%28===0){for(const c of G.countries)aiTick(c);
+  const p=C(G.player);p.hist.push({d:G.day,gdp:p.gdp,t:p.treasury});if(p.hist.length>200)p.hist.shift();
+  if(p.alive&&Math.random()<.12){const e=EVENTS[Math.floor(Math.random()*EVENTS.length)];log(`📰 ${e.n}: ${e.f(p)}`,'imp')}
+  if(mapMode!=='pol')dirty=true;
+ }
+ G.day+=7;
+ if(year()>=1936&&!G.ended){G.ended=true;G.speed=0;endGame()}
+}
+function endGame(){
+ const r=G.countries.filter(c=>c.alive).sort((a,b)=>b.gdp-a.gdp);const rank=r.findIndex(c=>c.id===G.player)+1;
+ popup('1936년 — 시대의 끝',`당신의 ${C(G.player).name}은(는) GDP 기준 세계 <b>${rank}위</b>로 한 세기를 마쳤습니다.<br>계속 플레이할 수 있습니다.`);
+}
+
+// ================== 렌더링: 지도 ==================
+const cv=$('map'),ctx=cv.getContext('2d');
+function stateColor(s){
+ if(s.sea)return[34,62,98];
+ if(s.owner<0)return[120,120,120];
+ const c=C(s.owner);
+ if(mapMode==='pol')return c.col;
+ if(mapMode==='pop'){const v=cl(Math.log(s.pop/300)/Math.log(12),0,1);return[40+215*v,60+120*(1-v),90-60*v]}
+ if(mapMode==='ind'){const v=cl((s.gdp||0)/3000,0,1);return[50+60*v,70+180*v,60+40*v]}
+ if(mapMode==='sol'){const v=cl(c.sol.w/20,0,1);return[220-170*v,80+150*v,70]}
+ return c.col;
+}
+function drawMap(){
+ if(!RAST)return;const img=ctx.createImageData(W,H),d=img.data;
+ const cols=G.states.map(stateColor);
+ const enemy=new Set();G.wars.forEach(w=>{if(w.a===G.player)enemy.add(w.b);if(w.b===G.player)enemy.add(w.a)});
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const i=y*W+x,a=RAST[i],s=G.states[a];let c=cols[a];
+  let r=c[0],g=c[1],b=c[2];const t=TEX[i];
+  if(s.sea){const wv=Math.sin(x*.08+y*.03)*4;r+=wv;g+=wv;b+=wv+t*.5}
+  else{r=r*.88+t;g=g*.88+t;b=b*.88+t;
+   if(a===selState){r=r*.6+100;g=g*.6+100;b=b*.6+100}
+   if(mapMode==='pol'&&enemy.has(s.owner)&&(x+y)%14<3){r=r*.5+90;g*=.5;b*=.5}
+   if(s.owner!==G.player&&mapMode==='pol'){r=r*.82+20;g=g*.82+20;b=b*.82+20}
+   const ar=x<W-1?RAST[i+1]:a,ad=y<H-1?RAST[i+W]:a;
+   for(const nb of[ar,ad])if(nb!==a){const o=G.states[nb];
+    if(o.sea||o.owner!==s.owner){r=15;g=15;b=20}else{r*=.7;g*=.7;b*=.7}}
+  }
+  // 해안선
+  if(s.sea){const ar=x<W-1?RAST[i+1]:a,ad=y<H-1?RAST[i+W]:a;if(!G.states[ar].sea||!G.states[ad].sea){r=20;g=30;b=40}}
+  d[i*4]=r;d[i*4+1]=g;d[i*4+2]=b;d[i*4+3]=255;
+ }
+ ctx.putImageData(img,0,0);
+ // 국가 라벨
+ ctx.textAlign='center';ctx.textBaseline='middle';
+ for(const c of G.countries){if(!c.alive)continue;let x=0,y=0,n=0;
+  for(const s of ownStates(c.id)){const ce=CEN[s.id];x+=ce.x*ce.n;y+=ce.y*ce.n;n+=ce.n}
+  if(!n)continue;x/=n;y/=n;const fs=cl(Math.sqrt(n)/16,11,30);
+  ctx.font=`bold ${fs}px serif`;ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.75)';ctx.fillStyle=c.id===G.player?'#ffe9a8':'#f2ead6';
+  ctx.strokeText(c.name,x,y);ctx.fillText(c.name,x,y);
+  const cap=CEN[c.capital];ctx.fillStyle='#000';ctx.beginPath();ctx.arc(cap.x,cap.y+fs*.9,3.5,0,7);ctx.fill();ctx.fillStyle='#ffd75e';ctx.beginPath();ctx.arc(cap.x,cap.y+fs*.9,2.3,0,7);ctx.fill();
+ }
+ dirty=false;
+}
+function stateAt(ev){const r=cv.getBoundingClientRect();const x=Math.floor((ev.clientX-r.left)/r.width*W),y=Math.floor((ev.clientY-r.top)/r.height*H);if(x<0||y<0||x>=W||y>=H)return-1;return RAST[y*W+x]}
+cv.addEventListener('click',e=>{if(!G)return;const a=stateAt(e);if(a<0||G.states[a].sea)return;selState=a;tab='state';dirty=true;renderAll()});
+cv.addEventListener('mousemove',e=>{if(!G)return;const a=stateAt(e),tp=$('tip');if(a<0||G.states[a].sea){tp.style.display='none';return}
+ const s=G.states[a],c=C(s.owner);
+ tp.innerHTML=`<b>${s.name}</b> <span style="color:${rgb(c.col)}">■</span> ${c.name}<br>인구 ${fpop(s.pop)} · GDP ${fmt(s.gdp||0)}<br>${Object.keys(s.res).filter(k=>s.res[k]).map(k=>RESN[k]+' '+s.res[k]).join(' · ')}`;
+ tp.style.display='block';tp.style.left=(e.clientX+14)+'px';tp.style.top=(e.clientY+14)+'px'});
+cv.addEventListener('mouseleave',()=>$('tip').style.display='none');
+
+// ================== 렌더링: UI ==================
+function renderTop(){
+ const c=C(G.player);
+ const sp=[0,1,2,3,4].map(i=>`<button data-act="speed" data-v="${i}" class="${G.speed===i?'on':''}">${i?'▶'.repeat(i):'⏸'}</button>`).join('');
+ $('top').innerHTML=`
+ <div><span class="flag" style="background:${rgb(c.col)}"></span> <b style="color:var(--gold);font-size:16px">${c.name}</b></div>
+ <div class="stat"><small>날짜</small><b>${dateStr()}</b></div>
+ <div class="stat"><small>국고</small><b class="${c.treasury<0?'neg':''}">£${fmt(c.treasury)}</b></div>
+ <div class="stat"><small>주간 수지</small><b class="${c.bal<0?'neg':'pos'}">${sgn(c.bal)}</b></div>
+ <div class="stat"><small>GDP (주간)</small><b>${fmt(c.gdp)}</b></div>
+ <div class="stat"><small>인구</small><b>${fpop(c.popT)}</b></div>
+ <div class="stat"><small>안정도</small><b class="${c.stab<30?'neg':c.stab>60?'pos':''}">${Math.round(c.stab)}%</b></div>
+ <div class="stat"><small>건설력</small><b>${fmt(c.cp)}/주</b></div>
+ <div class="stat"><small>군사력</small><b>${fmt(c.army)}</b></div>
+ <div style="margin-left:auto;display:flex;gap:3px">${sp}<button data-act="save">💾 저장</button><button data-act="help">❓</button></div>`;
+}
+const TABS={nation:'🏛️ 국가',state:'🗺️ 주',market:'⚖️ 시장',build:'🏗️ 건설',laws:'📜 법률',diplo:'🤝 외교'};
+function renderTabs(){$('tabs').innerHTML=Object.entries(TABS).map(([k,v])=>`<button data-act="tab" data-v="${k}" class="${tab===k?'on':''}">${v}</button>`).join('')}
+function renderModes(){$('modes').innerHTML=[['pol','정치'],['pop','인구'],['ind','산업'],['sol','생활수준']].map(([k,v])=>`<button data-act="mode" data-v="${k}" class="${mapMode===k?'on':''}">${v}</button>`).join('')}
+function bar(v,max,col){return`<div class="bar"><i style="width:${cl(v/max*100,0,100)}%;background:${col||'var(--gold)'}"></i></div>`}
+
+function pNation(){
+ const c=C(G.player),i=c.inc,cnt=c.cnt||{};
+ const rank=G.countries.filter(x=>x.alive).sort((a,b)=>b.gdp-a.gdp);
+ let h=`<h3>${c.name}</h3>
+ <div class="card"><h4 style="margin-top:0">재정 (주간)</h4><table>
+ <tr><td>소득세</td><td class="pos">+${fmt(i.tax||0)}</td></tr><tr><td>국가 배당</td><td class="pos">+${fmt(i.div||0)}</td></tr><tr><td>관세</td><td class="pos">+${fmt(i.tariff||0)}</td></tr>
+ <tr><td>정부 건물 (건설·병영·철도)</td><td class="neg">-${fmt(i.govCost||0)}</td></tr><tr><td>행정비</td><td class="neg">-${fmt(i.admin||0)}</td></tr><tr><td>부채 이자</td><td class="neg">-${fmt(i.interest||0)}</td></tr>
+ <tr><td><b>합계</b></td><td class="${c.bal<0?'neg':'pos'}"><b>${sgn(c.bal)}</b></td></tr></table>
+ <div class="row" style="margin-top:6px"><span>민간 투자 기금</span><b>£${fmt(c.invest)}</b></div></div>
+ <div class="card"><h4 style="margin-top:0">계층과 생활수준</h4><table><tr><th>계층</th><th>인구</th><th>생활수준</th><th>소비력</th></tr>
+ ${['p','w','m','u'].map(k=>`<tr><td>${STRN[k]}</td><td>${fpop(cnt[k]||0)}</td><td>${c.sol[k].toFixed(1)}</td><td>${(c.wealth[k]*100).toFixed(0)}%</td></tr>`).join('')}</table>
+ <div class="row"><span>취업 인구</span><b>${fpop(c.emp)}</b></div><div class="row"><span>급진주의</span><b class="${c.radical>30?'neg':''}">${c.radical}%</b></div></div>
+ <div class="card"><h4 style="margin-top:0">이익집단</h4>
+ ${Object.entries(IGS).map(([k,g])=>`<div class="row"><span style="color:${g.c}">● ${g.n}</span><span>영향력 ${((c.clout[k]||0)*100).toFixed(0)}% · 지지 <b class="${(c.ig[k]||0)<0?'neg':'pos'}">${sgn(c.ig[k]||0)}</b></span></div>${bar((c.ig[k]||0)+10,20,g.c)}`).join('')}
+ </div>
+ <div class="card"><h4 style="margin-top:0">세계 순위 (GDP)</h4><table>${rank.map((x,n)=>`<tr${x.id===G.player?' style="color:var(--gold)"':''}><td>${n+1}. <span style="color:${rgb(x.col)}">■</span> ${x.name}</td><td>${fmt(x.gdp)}</td></tr>`).join('')}</table></div>`;
+ if(c.hist.length>2){h+=`<div class="card"><h4 style="margin-top:0">GDP 추이</h4>${spark(c.hist.map(x=>x.gdp))}</div>`}
+ return h;
+}
+function spark(arr){const mx=Math.max(...arr),mn=Math.min(...arr);const w=390,h=60;const pts=arr.map((v,i)=>`${(i/(arr.length-1)*w).toFixed(1)},${(h-(v-mn)/(mx-mn||1)*h).toFixed(1)}`).join(' ');
+ return`<svg width="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="height:60px"><polyline fill="none" stroke="#d8b45a" stroke-width="2" points="${pts}"/></svg><div class="row"><small>${fmt(mn)}</small><small>${fmt(mx)}</small></div>`}
+
+function pState(){
+ if(selState<0)return'<h3>주</h3><p style="color:var(--dim)">지도에서 주를 클릭하세요.</p>';
+ const s=G.states[selState],c=C(s.owner),mine=s.owner===G.player,pc=C(G.player);
+ let jobs=0;for(const t in s.b)jobs+=(s.b[t]||0)*5;
+ let h=`<h3>${s.name} <small style="color:${rgb(c.col)}">${c.name}${c.capital===s.id?' · 수도':''}</small></h3>
+ <div class="card"><div class="row"><span>인구</span><b>${fpop(s.pop)}</b></div><div class="row"><span>일자리 / 노동가능인구</span><b>${fpop(jobs)} / ${fpop(s.pop*.5)}</b></div>${bar(jobs,s.pop*.5)}
+ <div class="row"><span>고용률(건물 충원율)</span><b>${((s.staff||1)*100).toFixed(0)}%</b></div><div class="row"><span>주간 생산액</span><b>${fmt(s.gdp||0)}</b></div>
+ <div class="row"><span>자원</span><span>${Object.keys(RESN).map(k=>`${RESN[k]} ${s.res[k]||0}`).join(' · ')}</span></div>
+ ${s.coast?'<div class="row"><span>⚓ 해안 주</span></div>':''}</div>
+ <h4>건물</h4><table><tr><th>건물</th><th>Lv</th><th>단계당 이익</th><th></th></tr>`;
+ for(const t in BLD){const lv=s.b[t]||0;const ok=mine&&canBuild(s,t,pc);if(!lv&&!ok)continue;const d=BLD[t];
+  const pr=d.gov?null:(lv?s.bp[t]:estProfit(c,s,t));
+  const q=mine?pc.queue.filter(x=>x.s===s.id&&x.t===t).length:0;
+  h+=`<tr><td>${d.ic} ${d.n}${q?` <small style="color:var(--gold)">(+${q})</small>`:''}</td><td>${lv}${d.res?`/${capFor(s,t)}`:''}</td><td class="${pr==null?'':pr<0?'neg':'pos'}">${pr==null?'<small>정부</small>':fmt(pr||0)}${!lv&&pr!=null?'<small>*</small>':''}</td>
+  <td>${mine?`<button data-act="build" data-s="${s.id}" data-t="${t}" ${ok?'':'disabled'} title="건설 ${d.cp}pt">+</button> <button data-act="demol" data-s="${s.id}" data-t="${t}" ${lv?'':'disabled'}>−</button>`:''}</td></tr>`;}
+ h+=`</table><p style="color:var(--dim);font-size:11px">* 현재 시장 가격 기준 예상 이익. 정부 건물은 국고에서 비용을 냅니다.</p>`;
+ if(mine){h+=`<h4>건물 설명</h4><table>${Object.entries(BLD).filter(([t])=>unlocked(t)).map(([t,d])=>`<tr><td>${d.ic} ${d.n}</td><td style="font-size:11px">${Object.entries(d.i).map(([g,v])=>GOODS[g][2]+v).join(' ')||'—'} → ${Object.entries(d.o).map(([g,v])=>GOODS[g][2]+v).join(' ')||(t==='constr'?'건설력 5':t==='barracks'?'군사력 10':'생산성 +8%')}</td><td>${d.cp}pt</td></tr>`).join('')}</table>`}
+ return h;
+}
+function pMarket(){
+ const c=C(G.player);
+ let h=`<h3>국내 시장</h3><p style="color:var(--dim);font-size:12px">무역 정책: <b>${LAWS.trade.o[c.laws.trade]}</b>. 가격이 높으면 그 상품을 만드는 건물이 수익을 냅니다.</p>
+ <table><tr><th>상품</th><th>가격</th><th>세계가</th><th>공급</th><th>수요</th><th>수입/수출</th></tr>`;
+ for(const g of GK){const p=c.price[g],b=GOODS[g][1],r=p/b;const ie=c.imp[g]>0?`<span class="neg">↓${fmt(c.imp[g])}</span>`:c.exp[g]>0?`<span class="pos">↑${fmt(c.exp[g])}</span>`:'—';
+  h+=`<tr><td>${GOODS[g][2]} ${GOODS[g][0]}</td><td style="color:${r>1.15?'#f08a7e':r<.85?'#8fd18d':'inherit'}">${p.toFixed(1)} <small>(${r>=1?'+':''}${((r-1)*100).toFixed(0)}%)</small></td><td>${G.world[g].toFixed(1)}</td><td>${fmt(c.S[g])}</td><td>${fmt(c.D[g])}</td><td>${ie}</td></tr>`;
+  if(c.fill[g]<.97)h+=`<tr><td colspan="6" style="font-size:11px;color:var(--red)">⚠ ${GOODS[g][0]} 부족: 수요의 ${(c.fill[g]*100).toFixed(0)}%만 충족</td></tr>`;}
+ return h+'</table>';
+}
+function pBuild(){
+ const c=C(G.player);
+ let h=`<h3>건설</h3><div class="card"><div class="row"><span>건설력</span><b>${fmt(c.cp)} / 주</b></div><small style="color:var(--dim)">건설 부문을 늘리면 건설력이 증가합니다 (목재 소비). 주 탭에서 + 버튼으로 건설을 예약하세요.</small></div>
+ <h4>정부 건설 대기열 (${c.queue.length})</h4>`;
+ if(!c.queue.length)h+='<p style="color:var(--dim)">비어 있음</p>';
+ let acc=0;
+ c.queue.forEach((q,n)=>{const d=BLD[q.t],s=G.states[q.s];const rem=d.cp-q.p;acc+=rem;const eta=c.cp>0?Math.ceil(acc/c.cp):'∞';
+  h+=`<div class="card" style="padding:6px"><div class="row"><span>${d.ic} ${d.n} — ${s.name}</span><span><small>약 ${eta}주</small> <button data-act="qup" data-v="${n}" ${n?'':'disabled'}>▲</button> <button data-act="qdel" data-v="${n}">✕</button></span></div>${bar(q.p,d.cp)}</div>`});
+ h+=`<h4>민간 투자 (${c.privQ.length})</h4><p style="color:var(--dim);font-size:12px">기업가들이 이익이 나는 산업에 스스로 투자합니다. 기금: £${fmt(c.invest)}</p>`;
+ c.privQ.forEach(q=>{h+=`<div class="row"><span>${BLD[q.t].ic} ${BLD[q.t].n} — ${G.states[q.s].name}</span><small>${q.w}주 남음</small></div>`});
+ // 추천
+ const best=bestInvest(c);if(best)h+=`<h4>추천</h4><div class="card">💡 현재 가장 수익성 높은 투자: <b>${BLD[best.t].n}</b> (${best.s.name}) <button data-act="build" data-s="${best.s.id}" data-t="${best.t}">예약</button></div>`;
+ return h;
+}
+function pLaws(){
+ const c=C(G.player);
+ let h=`<h3>법률</h3>`;
+ if(c.enact)h+=`<div class="card">📜 제정 중: <b>${LAWS[c.enact.k].n} → ${LAWS[c.enact.k].o[c.enact.v]}</b>${bar(c.enact.p,1)}<button data-act="cancelLaw" style="margin-top:6px">취소</button></div>`;
+ for(const k in LAWS){const L=LAWS[k];
+  h+=`<div class="card"><b>${L.n}</b>: <span style="color:var(--gold)">${L.o[c.laws[k]]}</span>${L.d&&L.d[c.laws[k]]?`<br><small style="color:var(--dim)">${L.d[c.laws[k]]}</small>`:''}<div class="lawopts">`;
+  for(const v in L.o){if(v===c.laws[k])continue;
+   const re=Object.entries(IGS).map(([ik,ig])=>{const dv=(ig.pref[k][v]||0)-(ig.pref[k][c.laws[k]]||0);return dv?`<span style="color:${ig.c}">${ig.n}${dv>0?'▲':'▼'}</span>`:''}).filter(x=>x).join(' ');
+   const instant=k==='tax';
+   h+=`<button data-act="law" data-k="${k}" data-v="${v}" ${(c.enact&&!instant)?'disabled':''} title="${L.d?L.d[v]||'':''}">${L.o[v]}${instant?' (즉시)':''}<br><small>${re}</small></button>`;}
+  h+='</div></div>';}
+ return h+'<p style="color:var(--dim);font-size:12px">법 제정은 약 반년 걸리며 안정도가 높을수록 빠릅니다. 이익집단의 지지가 떨어지면 안정도가 낮아지고 생산성이 하락합니다.</p>';
+}
+function pDiplo(){
+ const p=C(G.player);const nb=new Set(neighbors(G.player));
+ let h=`<h3>외교 & 전쟁</h3>`;
+ const my=G.wars.filter(w=>w.a===G.player||w.b===G.player);
+ if(my.length){h+='<h4>진행 중인 전쟁</h4>';my.forEach(w=>{const e=w.a===G.player?w.b:w.a;const sc=w.a===G.player?w.score:-w.score;const i=G.wars.indexOf(w);
+  h+=`<div class="card"><div class="row"><b>vs ${C(e).name}</b><span>${w.weeks}주째</span></div><div class="row"><span>전쟁 점수</span><b class="${sc<0?'neg':'pos'}">${sc.toFixed(0)}</b></div>
+  <div class="bar" style="position:relative"><i style="margin-left:${sc<0?50+sc/2:50}%;width:${Math.abs(sc)/2}%;background:${sc<0?'var(--red)':'var(--grn)'}"></i></div>
+  <div class="row" style="margin-top:6px"><span>아군 ${fmt(p.army)} vs 적군 ${fmt(C(e).army)}</span><span>
+  <button data-act="peace" data-v="${i}">${sc>=40?'영토 요구':sc<=-40?'항복':'백색평화'}</button></span></div></div>`})}
+ h+=`<h4>열강</h4><table><tr><th>국가</th><th>GDP</th><th>군사력</th><th></th></tr>`;
+ for(const c of G.countries){if(!c.alive||c.id===G.player)continue;
+  const war=G.wars.some(w=>(w.a===c.id&&w.b===G.player)||(w.b===c.id&&w.a===G.player));
+  const can=nb.has(c.id)&&!war&&!truce(G.player,c.id);
+  h+=`<tr><td><span style="color:${rgb(c.col)}">■</span> ${c.name}${nb.has(c.id)?' <small>(인접)</small>':''}${atWar(c.id)?' ⚔️':''}</td><td>${fmt(c.gdp)}</td><td class="${c.army>p.army?'neg':'pos'}">${fmt(c.army)}</td>
+  <td>${war?'<small class="neg">교전 중</small>':truce(G.player,c.id)?'<small>휴전</small>':`<button data-act="war" data-v="${c.id}" ${can?'':'disabled'}>선전포고</button>`}</td></tr>`;}
+ h+=`</table><p style="color:var(--dim);font-size:12px">인접(육지 또는 같은 바다)한 나라에만 선전포고할 수 있습니다. 전쟁 점수 +40 이상이면 1개 주, +90 이상이면 2개 주를 얻습니다. 병영은 전시에 무기·의류를 두 배로 소비합니다.</p>`;
+ const others=G.wars.filter(w=>w.a!==G.player&&w.b!==G.player);
+ if(others.length)h+='<h4>세계의 전쟁</h4>'+others.map(w=>`<div class="row"><span>${C(w.a).name} ⚔️ ${C(w.b).name}</span><small>${w.score.toFixed(0)}</small></div>`).join('');
+ return h;
+}
+let lastPanel=0;
+function renderPanel(force){
+ const now=performance.now();if(!force&&now-lastPanel<400)return;lastPanel=now;
+ const sc=$('panel').scrollTop;
+ $('panel').innerHTML={nation:pNation,state:pState,market:pMarket,build:pBuild,laws:pLaws,diplo:pDiplo}[tab]();
+ $('panel').scrollTop=sc;
+}
+function renderLog(){$('log').innerHTML=G.log.slice(0,60).map(l=>`<div class="${l.c}">[${l.t}] ${l.m}</div>`).join('')}
+function renderAll(){renderTop();renderTabs();renderModes();renderPanel(true);if(dirty)drawMap()}
+
+// ================== 입력 ==================
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-act]');if(!b||!G)return;const a=b.dataset.act,v=b.dataset.v;const c=C(G.player);
+ if(a==='speed')G.speed=+v;
+ else if(a==='tab')tab=v;
+ else if(a==='mode'){mapMode=v;dirty=true}
+ else if(a==='build'){const s=G.states[+b.dataset.s];if(canBuild(s,b.dataset.t,c)){c.queue.push({s:s.id,t:b.dataset.t,p:0})}}
+ else if(a==='demol'){const s=G.states[+b.dataset.s];if(s.b[b.dataset.t]>0&&confirm(`${BLD[b.dataset.t].n} 1단계를 철거할까요?`))s.b[b.dataset.t]--}
+ else if(a==='qdel')c.queue.splice(+v,1);
+ else if(a==='qup'){const i=+v;[c.queue[i-1],c.queue[i]]=[c.queue[i],c.queue[i-1]]}
+ else if(a==='law'){const k=b.dataset.k;if(k==='tax'){c.laws.tax=b.dataset.v;log(`세율을 ${LAWS.tax.o[b.dataset.v]}(으)로 변경했습니다.`)}else{c.enact={k,v:b.dataset.v,p:0};log(`📜 ${LAWS[k].n}: ${LAWS[k].o[b.dataset.v]} 제정을 시작합니다.`)}}
+ else if(a==='cancelLaw')c.enact=null;
+ else if(a==='war'){const t=C(+v);if(confirm(`${t.name}에 선전포고하시겠습니까?`))declareWar(G.player,t.id)}
+ else if(a==='peace'){const w=G.wars[+v];if(!w)return;const sc=w.a===G.player?w.score:-w.score;
+  if(sc>=40||sc<=-40)endWar(w);else if(w.weeks<20)popup('협상 거부','상대가 아직 협상할 생각이 없습니다. (20주 이후 가능)');
+  else if(sc>-20)endWar(w,true);else popup('협상 거부','상대는 승리를 확신하고 있습니다.')}
+ else if(a==='save'){saveGame();log('💾 게임이 저장되었습니다.')}
+ else if(a==='help'){help();return}
+ renderAll();
+});
+document.addEventListener('keydown',e=>{if(!G||e.target.tagName==='INPUT')return;if(e.code==='Space'){e.preventDefault();G.speed=G.speed?0:(G.lastSpeed||2);if(G.speed)G.lastSpeed=G.speed;renderTop()}if('1234'.includes(e.key)){G.speed=+e.key;G.lastSpeed=G.speed;renderTop()}});
+
+function popup(t,body){$('mbox').innerHTML=`<h3>${t}</h3><div style="line-height:1.7">${body}</div><div style="text-align:right;margin-top:14px"><button onclick="document.getElementById('modal').style.display='none'">확인</button></div>`;$('modal').style.display='flex';if(G){G.lastSpeed=G.speed||G.lastSpeed;G.speed=0}}
+function help(){popup('플레이 방법',`<b>WorldFate II</b>는 1836~1936년을 배경으로 한 산업·경제 전략 게임입니다.<br><br>
+• <b>경제</b>: 주(州)에 건물을 지으면 사람들이 고용되어 상품을 생산합니다. 가격은 국내 수요·공급과 세계 시장으로 결정됩니다.<br>
+• <b>인구 계층</b>: 일자리가 있는 노동자·중산층·상류층만 시장에서 소비하고 세금을 냅니다. 산업화 = 시장 성장!<br>
+• <b>건설</b>: 건설 부문이 건설력을 만들고, 국고로 비용을 냅니다. 민간 기업가도 이익이 나는 곳에 스스로 투자합니다.<br>
+• <b>법률</b>: 경제 체제·무역·노동법 등을 바꾸면 이익집단의 지지가 변하고 안정도에 영향을 줍니다.<br>
+• <b>전쟁</b>: 병영 수 × 무기·의류 공급 = 군사력. 인접국과 싸워 영토를 얻으세요.<br><br>
+<b>조작</b>: 스페이스=일시정지, 1~4=속도, 지도 클릭=주 선택. 매월 1회 자동 저장.`)}
+
+// ================== 저장 ==================
+function saveGame(){try{const s={...G};localStorage.setItem('wf2_save',JSON.stringify(s,(k,v)=>k==='_sea'?undefined:v))}catch(e){console.warn(e)}}
+function loadGame(){try{const s=localStorage.getItem('wf2_save');if(!s)return false;G=JSON.parse(s);G.speed=0;buildRaster();return true}catch(e){return false}}
+
+// ================== 시작 ==================
+function startScreen(){
+ const has=!!localStorage.getItem('wf2_save');
+ const seed=Math.floor(Math.random()*1e9);
+ G={seed,day:0,player:0,speed:0,states:genWorld(seed),countries:[],wars:[],truces:[],log:[],world:{}};
+ GK.forEach(g=>G.world[g]=GOODS[g][1]);
+ buildRaster();assignCountries(seed);
+ for(let i=0;i<8;i++){for(const g of GK){let a=0;for(const c of G.countries)a+=c.price[g];G.world[g]=a/G.countries.length}for(const c of G.countries)econ(c)}// 워밍업
+ G.player=-1;drawMap();G.player=0;
+ $('mbox').innerHTML=`<p class="title">WORLDFATE II</p><p class="sub">산업과 제국의 시대 · 1836 – 1936</p>
+ ${has?'<div style="text-align:center;margin-bottom:12px"><button data-start="load" style="padding:8px 20px;font-size:15px">📂 이어하기</button></div>':''}
+ <p style="color:var(--dim)">통치할 나라를 고르세요. (지도는 매번 새로 생성됩니다)</p>
+ <div class="cgrid">${G.countries.map(c=>{const ss=ownStates(c.id);const pop=ss.reduce((a,s)=>a+s.pop,0);
+  return`<button class="cpick" data-start="${c.id}"><span class="flag" style="display:inline-block;width:18px;height:12px;background:${rgb(c.col)}"></span> <b>${c.name}</b><br>
+  <span class="tag">${ss.length}개 주</span><span class="tag">인구 ${fpop(pop)}</span><span class="tag">GDP ${fmt(c.gdp)}</span><br><small style="color:var(--dim)">${LAWS.economy.o[c.laws.economy]} · ${LAWS.trade.o[c.laws.trade]} · ${LAWS.voting.o[c.laws.voting]}</small></button>`}).join('')}</div>
+ <div style="text-align:center;margin-top:12px"><button data-start="reroll">🎲 다른 세계 생성</button></div>`;
+ $('modal').style.display='flex';
+}
+$('mbox').addEventListener('click',e=>{const b=e.target.closest('[data-start]');if(!b)return;const v=b.dataset.start;
+ if(v==='reroll'){startScreen();return}
+ if(v==='load'){if(!loadGame()){alert('불러오기 실패');return}}
+ else{G.player=+v;G.speed=0;log(`👑 ${C(G.player).name}의 통치를 시작합니다. 1836년, 산업의 시대가 열렸습니다.`,'imp')}
+ $('modal').style.display='none';selState=C(G.player).capital;tab='nation';dirty=true;renderAll();renderLog();
+ if(v!=='load')help();
+});
+
+// 게임 루프
+const SPD=[0,900,450,180,50];let acc=0,last=performance.now();
+function loop(t){
+ const dt=t-last;last=t;
+ if(G&&G.speed&&G.player>=0&&$('modal').style.display==='none'){acc+=dt;
+  if(acc>=SPD[G.speed]){acc=0;tick();if(G.day%28===0)saveGame();renderTop();renderPanel();if(dirty)drawMap()}}
+ requestAnimationFrame(loop);
+}
+window.addEventListener('resize',()=>{});
+startScreen();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
